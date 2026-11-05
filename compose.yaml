@@ -1,7 +1,11 @@
 services:
   event-downloader:
-    build: .
-    image: himilou/luckktasks-py:Prod1
+    build:
+      context: .
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+    image: ${IMAGE:-himilou/luckypythontasks:Prod1-1}
     env_file:
       - .env
     volumes:
