@@ -1,0 +1,14 @@
+services:
+  event-downloader:
+    build: .
+    image: himilou/luckktasks-py:Prod1
+    env_file:
+      - .env
+    volumes:
+      - lucky_rails_public_assets:/event_img
+    restart: "no"
+
+volumes:
+  lucky_rails_public_assets:
+    external: true
+    name: lucky_rails_public_assets
