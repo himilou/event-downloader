@@ -181,16 +181,49 @@ def test_purge_invalid_date_raises(app, date):
 
 
 @pytest.mark.parametrize("existing,new,expected", [
-    ([], [], []), ([], [event()], [event()]), ([event()], [], []),
-    ([event()], [event()], []),
-    ([event()], [event(band="Renamed")], []),
-    ([event()], [event("b"), event(), event("a")], [event("b"), event("a")]),
+    ([], [], ([], [])), ([], [event()], ([event()], [])),
+    ([event()], [], ([], [])),
+    ([event()], [event()], ([], [])),
+    ([event()], [event(band="Renamed")], ([], [])),
+    ([event()], [event("b")], ([], [event("b")])),
+    ([event()], [event("b", band="Other"), event(), event("a")],
+     ([event("b", band="Other")], [event("a")])),
 ])
-def test_compare_by_drive_id(app, existing, new, expected):
+def test_compare_by_drive_id_and_filename(app, existing, new, expected):
     before_existing, before_new = list(existing), list(new)
     assert app.MapAndCompareEvents(existing, new) == expected
     assert existing == before_existing
     assert new == before_new
+
+
+@pytest.mark.parametrize("success", [True, False])
+def test_main_replaces_existing_file_and_retries_failed_update(app, monkeypatch, success):
+    old, replacement = event("old"), event("replacement")
+    added = event("added", band="Other")
+    app.WriteCurrentEvents([old])
+    monkeypatch.setattr(app, "ListFilesInPublicFolder", lambda _: [
+        remote(replacement), remote(added)
+    ])
+    download = MagicMock(side_effect=[
+        replacement["filename"] if success else None, added["filename"]
+    ])
+    monkeypatch.setattr(app, "DownloadFile", download)
+
+    app.main()
+    assert app.ReadCurrentEvents() == [replacement if success else old, added]
+    assert download.call_args_list == [
+        call(replacement["id"], replacement["filename"]),
+        call(added["id"], added["filename"]),
+    ]
+
+    download.reset_mock(side_effect=True)
+    download.return_value = replacement["filename"]
+    app.main()
+    assert app.ReadCurrentEvents() == [replacement, added]
+    if success:
+        download.assert_not_called()
+    else:
+        download.assert_called_once_with(replacement["id"], replacement["filename"])
 
 
 def test_main_sync_downloads_only_new_files_and_sorts(app, monkeypatch):

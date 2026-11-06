@@ -148,12 +148,21 @@ def ReadCurrentEvents():
     return data_list
 
 def MapAndCompareEvents(existing_events, new_events):
+    """Return new events and replacement files for existing event filenames."""
     old_map = {item["id"] : item for item in existing_events}
-    new_map = {item["id"] : item for item in new_events}
+    filename_map = {item["filename"]: item for item in existing_events}
 
-    added = [item for item in new_events if item["id"] not in old_map]
+    added = []
+    updated = []
+    for item in new_events:
+        if item["id"] in old_map:
+            continue
+        if item["filename"] in filename_map:
+            updated.append(item)
+        else:
+            added.append(item)
 
-    return added
+    return added, updated
 
 
 def main():
@@ -181,9 +190,22 @@ def main():
     else:
         current_events = []
 
-    # figure out which events we do not currrently have and download them
-    events_to_add = MapAndCompareEvents(current_events, new_events)
+    # Separate new events from replacement images for existing events.
+    events_to_add, events_to_update = MapAndCompareEvents(current_events, new_events)
     logger.info(f"Found {len(events_to_add)} new events to download")
+    logger.info(f"Found {len(events_to_update)} event files to update")
+
+    for e in events_to_update:
+        fname = DownloadFile(e["id"], e["filename"])
+        if fname:
+            # Commit the replacement ID only after the image is safely downloaded.
+            current_events = [
+                e if item["filename"] == e["filename"] else item
+                for item in current_events
+            ]
+            logger.info(f"DownloadFile: Successfully updated {fname}")
+        else:
+            logger.error(f"Error updating {e['filename']}")
     
     for e in events_to_add:
         fname = DownloadFile(e["id"], e["filename"])
